@@ -1,54 +1,43 @@
 name: Android Unsigned APK Build
 
 on:
-  # 可根据需求修改触发条件，这里配置为推送到 main 分支和手动触发
   push:
     branches:
       - main
   workflow_dispatch:
 
 jobs:
-  build-unsigned-apk:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # 检出代码
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 设置 Java 环境
-      - name: Set up Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
+          java-version: '17'
           distribution: 'temurin'
-          java-version: '11'
-          cache: 'gradle'
 
-      # 给 gradlew 脚本添加执行权限
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 运行 Gradle 构建任务，跳过签名步骤
-      - name: Build unsigned APK
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 'current'
-          arguments: assembleRelease -x :app:packageRelease
-
-      # 查找并移动生成的未签名 APK 文件
-      - name: Move unsigned APK
+      - name: Build Unsigned APK
         run: |
-          apk_file=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          if [ -n "$apk_file" ]; then
-            mv $apk_file unsigned_app.apk
-          else
-            echo "未找到 APK 文件"
-            
-          fi
+          ./gradlew assembleRelease --warning-mode all \
+            -Pandroid.injected.signing.store.type=none \
+            -Pandroid.injected.signing.store.password=unused \
+            -Pandroid.injected.signing.key.password=unused \
+            -Pandroid.injected.signing.key.alias=unused
 
-      # 上传未签名的 APK 作为工作流的产物
-      - name: Upload unsigned APK
-        uses: actions/upload-artifact@v3
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: unsigned-apk
-          path: unsigned_app.apk
+          path: |
+            app/build/outputs/apk/**/*.apk
+            app/build/outputs/bundle/**/*.aab
